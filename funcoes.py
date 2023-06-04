@@ -4,10 +4,11 @@ from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill
 from datetime import date
 from dic_reg_sped_icms_ipi import dic_registro_sped as drs
+from dic_reg_sped_contribuicoes import dic_registro_contribuicoes as drc
 from hashlib import md5
 from os.path import dirname
 
-##### FUNÇÃO ÚNICA PARA VALIDAÇÃO E MANIPULAÇÃO DO ARQUIVO SPED ICMS/IPI EM FORMATO .txt #####
+##### FUNÇÕES PARA VALIDAÇÃO E MANIPULAÇÃO DO ARQUIVO SPED ICMS/IPI EM FORMATO .txt e do arquivo SPED-Contribuições em formtado .txt.#####
 
 # Definição da fonte que irá ser utilizada nos cabeçalhos das colunas. Instância de uma Classe.
 fonte_titulo = Font(bold=True, color="1B1B1B")
@@ -15,7 +16,7 @@ fonte_titulo = Font(bold=True, color="1B1B1B")
 # Definição das cor de fundo das células que serão utilizadas como título das colunas. Instância de uma Classe.
 cor_de_fundo_titulo = PatternFill(fill_type="solid", start_color="E5E5E9")
 
-# Função para manipulçao do arquivo SPED em formato .txt.
+# Função para manipulçao do arquivo SPED ICMS/IPI em formato .txt.
 def manipular_e_processar_arq_sped_icms_ipi(caminho_arquivo):
     dict_arquivo_sped = {}
     # Caminho para encontrar o arquivo, utilizado para salvamento posterior do arquivo processado.
@@ -42,7 +43,7 @@ def manipular_e_processar_arq_sped_icms_ipi(caminho_arquivo):
             dict_arquivo_sped[lista_l1[0]] = []
             dict_arquivo_sped[lista_l1[0]].append(lista_l1)
 
-        nome_arquivo = "registros_sped_" + str(lista_l1[3]) + "_" + str(lista_l1[4]) + "_" + str(lista_l1[6]) + "_" + str(lista_l1[8]) + ".xlsx"
+        nome_arquivo = "reg_sped_icmsipi_" + str(lista_l1[3]) + "_" + str(lista_l1[4]) + "_" + str(lista_l1[6]) + "_" + str(lista_l1[8]) + ".xlsx"
 
         # Exclui a primeira linha do arquivo e a lista da primeira linha
         del l1_arquivo, lista_l1
@@ -95,6 +96,123 @@ def manipular_e_processar_arq_sped_icms_ipi(caminho_arquivo):
                 # Estilização das células que representam os títulos de cabeçalho.
                 sheet = book[nome_planilha]
                 sheet.append(drs[reg]["colunas_reg"])
+                for linha in sheet:
+                    for cel in linha:
+                        cel.font = fonte_titulo
+                        cel.fill = cor_de_fundo_titulo
+
+                # Adição das linhas do arquivo SPED ICMS IPI anteriormente separado em um dicionário.
+                for linha in dict_arquivo_sped[reg]:
+                    sheet.append(linha)
+
+                # Aplicação de filtro na planilha de cada registro.
+                sheet.auto_filter.ref = sheet.dimensions
+
+            # Para o caso do registro não ser encontrado no dicionário de armazenamento de dados.
+            else:
+                nome_planilha = "Descnh - " + reg
+                book.create_sheet(nome_planilha)
+                sheet = book[nome_planilha]
+                sheet.append(["Sem Titulo", "Sem Titulo", "Sem titulo"])
+                for linha in dict_arquivo_sped[reg]:
+                    sheet.append(linha)
+
+        # Limpa os dados presentes na variável
+        del dict_arquivo_sped
+
+        # Define o caminho mais o nome do arqvuivo para salvamento.
+        pasta_salvar = diretorio + "/" + nome_arquivo
+
+        # Limpa as variáveis
+        del diretorio, nome_arquivo
+
+        # Salva o arquivo no local indicado.
+        book.save(pasta_salvar)
+        
+        # Limpa a variável
+        del pasta_salvar
+
+# Função para manipulçao do arquivo SPED-Contribuicões em formato .txt.
+def manipular_e_processar_arq_sped_contribuicoes(caminho_arquivo):
+    dict_arquivo_sped = {}
+    # Caminho para encontrar o arquivo, utilizado para salvamento posterior do arquivo processado.
+    diretorio = dirname(caminho_arquivo)
+    with open(caminho_arquivo, "r", errors="replace") as arquivo:
+        # Lê a primeira linha do arquivo, implicando nas leituras posteriores que lerão as linhas após essa.
+        l1_arquivo = arquivo.readline()[:]
+
+        # Faz a validação do arquivo SPED ICMS/IPI utilizando a primeira linha do arquivo que contém a informação do registro "|0000|", ou seja, o arquivo será processado desde que contenha este indicativo. Adicionalmente, um arquivo SPED Contribuições poderá ser lido, já que também possui este indicativo de registro, no entanto, as colunas geradas ficarão mal formadas ou não serão encontradas para alguns registros.
+        if l1_arquivo[0:6] == "|0000|":
+            arquivo_valido = True
+        else:
+            arquivo_valido = False
+        if arquivo_valido is False:
+            raise exc.NaoEumArquivoSpedValido("O arquivo selecionado não é um arquivo SPED válido.")
+        
+        # Define o nome do arquivo que será salvo em Excel (.xlsx) na pasta de destino com base em alguns campos.
+        lista_l1 = l1_arquivo.split(sep="|")
+        del lista_l1[0]
+        del lista_l1[-1]
+
+        # Como não poderemos acessar a primeira linha novamente durante a iteração (varredura do arquivo), já adicionaremos ela de início ao dicionário que irá segregar os registros.
+        if lista_l1[0] not in dict_arquivo_sped.keys():
+            dict_arquivo_sped[lista_l1[0]] = []
+            dict_arquivo_sped[lista_l1[0]].append(lista_l1)
+
+        print(lista_l1)
+
+        nome_arquivo = "reg_sped_contrib_" + str(lista_l1[5]) + "_" + str(lista_l1[6]) + "_" + str(lista_l1[8]) + "_" + str(lista_l1[9]) + ".xlsx"
+
+        # Exclui a primeira linha do arquivo e a lista da primeira linha
+        del l1_arquivo, lista_l1
+        # Percorrendo linhas no arquivo para listar os dados do arquivo SPED
+        for linha in arquivo.readlines():
+            lista_temp = linha.split(sep="|")
+            del lista_temp[0]
+            del lista_temp[-1]
+            if lista_temp[0] not in dict_arquivo_sped.keys():
+                dict_arquivo_sped[lista_temp[0]] = []
+                dict_arquivo_sped[lista_temp[0]].append(lista_temp)
+            else:
+                dict_arquivo_sped[lista_temp[0]].append(lista_temp)
+
+            # Finalizando a lista de arquivos sped
+            if lista_temp[0] == "9999":
+                break
+
+        # Criando uma representação de um arquivo em Excel. Por padrão, a primeira aba se chama "Sheet", então excluímos ela e criamos um nova.
+        book = Workbook()
+        del book["Sheet"]
+        book.create_sheet("Indíce")
+
+        # Bloco para manipulação da aba de indíce de registros SPED ICMS IPI. Aqui, acessamos diratamente a planilha, adicionamos as coluns de cabeçalho e estilizamos com negrito e preenchimento de fundo.
+        sheet = book["Indíce"]
+        sheet.append(["Registros", "Descrição dos Registros"])
+        for linha in sheet:
+            for cel in linha:
+                cel.font = fonte_titulo
+                cel.fill = cor_de_fundo_titulo
+
+        # No loop abaixo, ocorre o acesso ao dicionário de dados dos registros SPED ICMS IPI, trazendo o número do registro de acordo com os registros que REALEMENTE estão presentes no arquivo SPED ICMS IPI em formato ".txt". Além disso, caso um registro presente no arquivo ".txt" não estaja presente no diconário de dados de registros (módulo dic_reg_sped_icms_ipi.py), a descrição do registro recebe um texto de atenção "ATENÇÃO!!!(...)". 
+        chaves_registros = drc.keys()
+        for reg in dict_arquivo_sped:
+            if reg in chaves_registros:
+                sheet.append([reg, drc[reg]["nome_reg"]])
+            else:
+                sheet.append([reg, "ATENÇÃO!!! O registro não está incluso no dicionário de dados."])
+
+        # Aplicação de filtro na planilha de indíce.
+        sheet.auto_filter.ref = sheet.dimensions
+
+        # Bloco de paginação dos registros SPED ICMS IPI em abas do Excel. O processo é o mesmo do descrito acima, com a diferenciação de que os títulos de colunas são originados diretamente do módulo módulo dic_reg_sped_icms_ipi.py, trazendo os nomes de colunas de acordo com o que existe lá armazenado. Caso o registro processado ainda não tenha sido adicionado ao dicionário de dados, a linha de título de colunas será mal formatada e a aba terá o descritivo de "Descnh - ", para indicar que ali é necessário uma atualização dos dados armazenados.
+        for reg in dict_arquivo_sped:
+            if reg in chaves_registros:
+                # Define o nome da aba, constituída do texto "Reg - " (registro) + o registro referente.
+                nome_planilha = "Reg - " + reg
+                book.create_sheet(nome_planilha)
+                # Estilização das células que representam os títulos de cabeçalho.
+                sheet = book[nome_planilha]
+                sheet.append(drc[reg]["colunas_reg"])
                 for linha in sheet:
                     for cel in linha:
                         cel.font = fonte_titulo
@@ -274,7 +392,7 @@ def confrontar_data_de_uso_com_data_atual():
         )
         dado_mes = cursor.fetchone()
         if dado_mes is not None:
-            if mes < dado_mes:
+            if mes < dado_mes[0]:
                 return False
             else:
                 return True

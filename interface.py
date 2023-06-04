@@ -14,7 +14,6 @@ sg.set_options(
     button_color=("#656565", "#BED133"),
     input_elements_background_color="#FFFFFF",
     input_text_color="#656565"
-
 )
 
 # Suprimento de dados advindo de funções para os componentes.
@@ -42,7 +41,11 @@ layout_validacao = [
 
 # Layout dos campos de seleção de arquivo para processamento.
 layout_arquivo = [
-    [sg.T('Selecione o arquivo SPED ICMS/IPI:', size=(30, 1), justification='left'), sg.Push(), sg.T("01:00", key="-TEMPO-")],
+    [
+        sg.T('Selecione o tipo de arquivo SPED:', size=(30, 1), justification='left'), 
+        sg.Radio("ICMS/IPI", "GRUPO_SPED", default=True, key="-ICMS_IPI-", background_color="#E5E5E9", circle_color="#FFFFFF"), sg.Radio("Contribuições", "GRUPO_SPED", default=False, key="-CONTRIB-", background_color="#E5E5E9", circle_color="#FFFFFF"),
+        sg.Push(), sg.T("01:00", key="-TEMPO-")
+    ],
     [
         sg.FileBrowse(button_text='Selecionar', key='-SELEC_ARQ-', size=(15, 1), target='-TXT_ARQ-', file_types=[("TXT files", "*.txt")]),
         sg.In('Nenhum arquivo selecionado.', key='-TXT_ARQ-', size=(70, 1), readonly=True)
@@ -76,6 +79,9 @@ while True:
     tempo_encerramento -= 1
     window["-TEMPO-"].update(value=f"00:{tempo_encerramento}" if tempo_encerramento >= 10 else f"00:0{tempo_encerramento}")
 
+    # Atualização do campo de validação no processo de digitação. Precisa disso por conta da atualização constante a cada 1 segundo do timeout no window.read().
+    window["-VALID_USO-"].update(value=value["-VALID_USO-"])
+
     # Encerra o programa após o fim do tempo definido.
     if tempo_encerramento < 0:
         break
@@ -95,51 +101,102 @@ while True:
 
     # Evento que chama a função que irá processar o arquivo SPED ICMS/IPI. As excessões fornecidas pelo módulo "excessões.py" são lançadas e tratadas para alguns tipos de manuseio do usuário, como por exemplo, tentar processar um arquivo sem selecionar um arquivo previamente. O tratamento é feito com o levantamento de pop-ups com mensagens de erro e destaque do logo em vermelho.
     if event == "-BOTAO_PROCES-":
-        try:
-            caminho_arquivo = str(value["-TXT_ARQ-"]).strip()
+        if value["-ICMS_IPI-"] == True:
+            try:
+                caminho_arquivo = str(value["-TXT_ARQ-"]).strip()
 
-            if value["-TXT_ARQ-"] == "Nenhum arquivo selecionado.":
-                raise exc.NenhumArquivoSelecionado("Selecione um arquivo antes de processar.")
+                if value["-TXT_ARQ-"] == "Nenhum arquivo selecionado.":
+                    raise exc.NenhumArquivoSelecionado("Selecione um arquivo antes de processar.")
+                
+                if fun.programa_validado() is False:
+                    raise exc.ArquivoNaoAutenticado("O programa precisa ser autenticado com o código mensal antes de processar o arquivo.")
+                
+                if fun.confrontar_data_de_uso_com_data_atual() is False:
+                    raise exc.MesOuAnoMenoresDoQueUltimoProcessamento("O mês do ano ano atual é menor do que o mês do último processamento de arquivo registrado pelo sistema. A data da máquina local pode ter sido modificada.")
+                
+                ok_cancel = sg.popup_ok_cancel("Deseja processar o arquivo selecionado?", title="Confirmação", icon="5N_icone_padrao.ico")
+                if ok_cancel == "OK":
+                    try:
+                        for i in range(400):
+                            window["-PROG-"].UpdateBar(i)
+
+                        fun.manipular_e_processar_arq_sped_icms_ipi(caminho_arquivo)
+
+                        for i in range(401, 1000):
+                            window["-PROG-"].UpdateBar(i)
+
+                        fun.adicionar_data_ultimo_uso()
+                        sg.popup("Arquivo processado com sucesso!", title="Concluído", icon="5N_icone_padrao.ico")
+                        window["-PROG-"].UpdateBar(0)
+
+                    except exc.NaoEumArquivoSpedValido:
+                        sg.popup("O arquivo selecionado não é um arquivo SPED válido.", title="Erro", icon="5N_icone_erro.ico")
+                        window["-PROG-"].UpdateBar(0)
+
+                if ok_cancel == "Cancel":
+                    pass
             
-            if fun.programa_validado() is False:
-                raise exc.ArquivoNaoAutenticado("O programa precisa ser autenticado com o código mensal antes de processar o arquivo.")
+            except exc.NenhumArquivoSelecionado:
+                sg.popup("Selecione um arquivo antes de processar.", title="Erro", icon="5N_icone_erro.ico")
+            except exc.ArquivoNaoAutenticado:
+                sg.popup(
+                    "O programa precisa ser autenticado com o código mensal antes de processar o arquivo.",
+                    title="Erro",
+                    icon="5N_icone_erro.ico"
+                )
+            except exc.MesOuAnoMenoresDoQueUltimoProcessamento:
+                sg.popup("O mês do ano ano atual é menor do que o mês do último processamento de arquivo registrado pelo sistema. A data da máquina local pode ter sido modificada.",
+                        title="Erro", 
+                        icon="5N_icone_erro.ico"
+                )
+        if value["-CONTRIB-"] == True:
+            try:
+                caminho_arquivo = str(value["-TXT_ARQ-"]).strip()
+
+                if value["-TXT_ARQ-"] == "Nenhum arquivo selecionado.":
+                    raise exc.NenhumArquivoSelecionado("Selecione um arquivo antes de processar.")
+                
+                if fun.programa_validado() is False:
+                    raise exc.ArquivoNaoAutenticado("O programa precisa ser autenticado com o código mensal antes de processar o arquivo.")
+                
+                if fun.confrontar_data_de_uso_com_data_atual() is False:
+                    raise exc.MesOuAnoMenoresDoQueUltimoProcessamento("O mês do ano ano atual é menor do que o mês do último processamento de arquivo registrado pelo sistema. A data da máquina local pode ter sido modificada.")
+                
+                ok_cancel = sg.popup_ok_cancel("Deseja processar o arquivo selecionado?", title="Confirmação", icon="5N_icone_padrao.ico")
+                if ok_cancel == "OK":
+                    try:
+                        for i in range(400):
+                            window["-PROG-"].UpdateBar(i)
+
+                        fun.manipular_e_processar_arq_sped_contribuicoes(caminho_arquivo)
+
+                        for i in range(401, 1000):
+                            window["-PROG-"].UpdateBar(i)
+
+                        fun.adicionar_data_ultimo_uso()
+                        sg.popup("Arquivo processado com sucesso!", title="Concluído", icon="5N_icone_padrao.ico")
+                        window["-PROG-"].UpdateBar(0)
+
+                    except exc.NaoEumArquivoSpedValido:
+                        sg.popup("O arquivo selecionado não é um arquivo SPED válido.", title="Erro", icon="5N_icone_erro.ico")
+                        window["-PROG-"].UpdateBar(0)
+
+                if ok_cancel == "Cancel":
+                    pass
             
-            if fun.confrontar_data_de_uso_com_data_atual() is False:
-                raise exc.MesOuAnoMenoresDoQueUltimoProcessamento("O mês do ano ano atual é menor do que o mês do último processamento de arquivo registrado pelo sistema. A data da máquina local pode ter sido modificada.")
-            
-            ok_cancel = sg.popup_ok_cancel("Deseja processar o arquivo selecionado?", title="Confirmação", icon="5N_icone_padrao.ico")
-            if ok_cancel == "OK":
-                try:
-                    for i in range(400):
-                        window["-PROG-"].UpdateBar(i)
-
-                    fun.manipular_e_processar_arq_sped_icms_ipi(caminho_arquivo)
-
-                    for i in range(401, 1000):
-                        window["-PROG-"].UpdateBar(i)
-                    sg.popup("Arquivo processado com sucesso!", title="Concluído", icon="5N_icone_padrao.ico")
-                    window["-PROG-"].UpdateBar(0)
-
-                except exc.NaoEumArquivoSpedValido:
-                    sg.popup("O arquivo selecionado não é um arquivo SPED ICMS/IPI válido.", title="Erro", icon="5N_icone_erro.ico")
-                    window["-PROG-"].UpdateBar(0)
-
-            if ok_cancel == "Cancel":
-                pass
-        
-        except exc.NenhumArquivoSelecionado:
-            sg.popup("Selecione um arquivo antes de processar.", title="Erro", icon="5N_icone_erro.ico")
-        except exc.ArquivoNaoAutenticado:
-            sg.popup(
-                "O programa precisa ser autenticado com o código mensal antes de processar o arquivo.",
-                title="Erro",
-                icon="5N_icone_erro.ico"
-            )
-        except exc.MesOuAnoMenoresDoQueUltimoProcessamento:
-            sg.popup("O mês do ano ano atual é menor do que o mês do último processamento de arquivo registrado pelo sistema. A data da máquina local pode ter sido modificada.",
-                     title="Erro", 
-                     icon="5N_icone_erro.ico"
-            )
+            except exc.NenhumArquivoSelecionado:
+                sg.popup("Selecione um arquivo antes de processar.", title="Erro", icon="5N_icone_erro.ico")
+            except exc.ArquivoNaoAutenticado:
+                sg.popup(
+                    "O programa precisa ser autenticado com o código mensal antes de processar o arquivo.",
+                    title="Erro",
+                    icon="5N_icone_erro.ico"
+                )
+            except exc.MesOuAnoMenoresDoQueUltimoProcessamento:
+                sg.popup("O mês do ano ano atual é menor do que o mês do último processamento de arquivo registrado pelo sistema. A data da máquina local pode ter sido modificada.",
+                        title="Erro", 
+                        icon="5N_icone_erro.ico"
+                )
 
     # Evento para limpar o caminho de um arquivo selecionado.
     if event == "-BOTAO_LIMP-":
